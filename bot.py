@@ -10,12 +10,12 @@ load_dotenv()
 
 TOKEN = os.getenv('TOKEN')
 
-DATABASE = os.getenv('MONGO_DATABASE')
 USERNAME = os.getenv('MONGO_USERNAME')
 PASSWORD = os.getenv('MONGO_PASSWORD')
 CLUSTER = os.getenv('MONGO_CLUSTER')
+APPNAME = os.getenv('MONGO_APPNAME')
 
-CONNECTION_STRING = f"mongodb+srv://{USERNAME}:{PASSWORD}@{CLUSTER}/{DATABASE}?retryWrites=true&w=majority"
+CONNECTION_STRING = f"mongodb+srv://{USERNAME}:{PASSWORD}@{CLUSTER}/?retryWrites=true&w=majority&appName={APPNAME}"
 
 db = MongoClient(CONNECTION_STRING)
 scheduler = AsyncIOScheduler()
