@@ -45,7 +45,7 @@ class Client(discord.Client):
 
     async def post_quote(self, channel: discord.TextChannel):
         # quotes table -> guild_id, channel_id, message_id, reaction_count
-        message_id = db.get_database(DATABASE).get_collection("quotes").find_one({"guild_id": channel.guild.id})
+        message_id = db.get_database(DATABASE).get_collection("quotes").find_one({"_id": channel.guild.id})
         if not message_id:
             return
         message_channel = self.get_channel(message_id["channel_id"])
@@ -58,7 +58,7 @@ class Client(discord.Client):
         embed.set_author(name=message.author.display_name, icon_url=message.author.avatar_url)
         message = await channel.send(embed=embed)
 
-        db.get_database(DATABASE).get_collection("quotes").delete_one({"guild_id": channel.guild.id})
+        db.get_database(DATABASE).get_collection("quotes").delete_one({"_id": channel.guild.id})
 
         # start new timer
         # TODO: check if this works 
@@ -75,15 +75,15 @@ class Client(discord.Client):
         # doesnt capture slash commands     
         
         # grab quote from guild
-        quote = db.get_database(DATABASE).get_collection("quotes").find_one({"guild_id": message.guild.id})
+        quote = db.get_database(DATABASE).get_collection("quotes").find_one({"_id": message.guild.id})
         
         # find count of greatest reaction count in message
         reaction_count = max([reaction.count for reaction in message.reactions]) if message.reactions else 0
 
         if not quote or reaction_count > quote["reaction_count"]:
             if quote:
-                db.get_database(DATABASE).get_collection("quotes").delete_one({"guild_id": message.guild.id})
-            db.get_database(DATABASE).get_collection("quotes").insert_one({"guild_id": message.guild.id}, {"$set": {"message_id": message.id, "reaction_count": reaction_count, "channel_id" : message.channel.id}})
+                db.get_database(DATABASE).get_collection("quotes").delete_one({"_id": message.guild.id})
+            db.get_database(DATABASE).get_collection("quotes").insert_one({"_id": message.guild.id, "channel_id": message.channel.id, "message_id": message.id, "reaction_count": reaction_count})
 
     
 
