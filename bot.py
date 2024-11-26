@@ -58,6 +58,8 @@ class Client(discord.Client):
         embed.set_author(name=message.author.display_name, icon_url=message.author.avatar_url)
         message = await channel.send(embed=embed)
 
+        db.get_database(DATABASE).get_collection("quotes").delete_one({"guild_id": channel.guild.id})
+
         # start new timer
         # TODO: check if this works 
         scheduler.add_job(self.post_quote, CronTrigger(hour=0, minute=0), args=[channel])
