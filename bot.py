@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.jobstores.base import JobLookupError
 import os
 
 load_dotenv()
@@ -23,7 +24,7 @@ scheduler = AsyncIOScheduler()
 
 class Client(discord.Client):
     def __init__(self):
-        super().__init__(intents=discord.Intents.default())
+        super().__init__(intents=discord.Intents.all())
         self.tree = app_commands.CommandTree(self)
 
     
@@ -42,13 +43,14 @@ class Client(discord.Client):
             channel = self.get_channel(guild["channel_id"])
             if not channel:
                 continue
-            scheduler.add_job(self.post_quote, CronTrigger(hour=0, minute=0), args=[channel], id=guild["_id"])
+            scheduler.add_job(self.post_quote, CronTrigger(hour=0, minute=0), args=[channel], id=str(guild["_id"]))
 
     async def post_quote(self, channel: discord.TextChannel):
         # quotes table -> guild_id, channel_id, message_id, reaction_count
         message_id = db.get_database(DATABASE).get_collection("quotes").find_one({"_id": channel.guild.id})
         if not message_id:
             return
+        
         message_channel = self.get_channel(message_id["channel_id"])
         if not message_channel:
             return
@@ -56,7 +58,7 @@ class Client(discord.Client):
         if not message:
             return
         embed = discord.Embed(title="Quote of the day", description=message.content)
-        embed.set_author(name=message.author.display_name, icon_url=message.author.avatar_url)
+        embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
         message = await channel.send(embed=embed)
 
         db.get_database(DATABASE).get_collection("quotes").delete_one({"_id": channel.guild.id})
@@ -66,15 +68,14 @@ class Client(discord.Client):
         scheduler.add_job(self.post_quote, CronTrigger(hour=0, minute=0), args=[channel])
         scheduler.start()
     
-    async def on_message(self, message: discord.Message):
-        if message.author == self.user:
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        if payload.user_id == self.user.id:
             return
         
-        # i think i can remove this
-        await self.tree.process_message(message)
+        message = await self.get_channel(payload.channel_id).fetch_message(payload.message_id)
+        if message.author == self.user:
+            return
 
-        # doesnt capture slash commands     
-        
         # grab quote from guild
         quote = db.get_database(DATABASE).get_collection("quotes").find_one({"_id": message.guild.id})
         
@@ -85,7 +86,6 @@ class Client(discord.Client):
             if quote:
                 db.get_database(DATABASE).get_collection("quotes").delete_one({"_id": message.guild.id})
             db.get_database(DATABASE).get_collection("quotes").insert_one({"_id": message.guild.id, "channel_id": message.channel.id, "message_id": message.id, "reaction_count": reaction_count})
-
     
 
 bot = Client()
@@ -93,7 +93,7 @@ bot = Client()
 @bot.tree.command(name="setup", description="Set channel to post quotes in")
 async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
     await interaction.response.defer()
-    if not interaction.author.guild_permissions.administrator:
+    if not interaction.user.guild_permissions.administrator:
         await interaction.followup.send("You need to be an administrator to run this command", ephemeral=True)
         return
     
@@ -112,29 +112,46 @@ async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
     db.get_database(DATABASE).get_collection("guilds").update_one({"_id": interaction.guild.id}, {"$set": {"channel_id": channel.id}}, upsert=True)
     await interaction.followup.send(f"Set channel to {channel.mention}")
 
-    scheduler.remove_job(interaction.guild.id)
-    scheduler.add_job(bot.post_quote, CronTrigger(hour=0, minute=0), args=[channel], id=interaction.guild.id)
+    try:
+        scheduler.remove_job(str(interaction.guild.id))
+    except JobLookupError:
+        pass
+    scheduler.add_job(bot.post_quote, CronTrigger(hour=0, minute=0), args=[channel], id=str(interaction.guild.id))
     
 @bot.tree.command(name="quote", description="Quote a message")
-async def quote(interaction: discord.Interaction):
+async def quote(interaction: discord.Interaction, message_id: str):
     await interaction.response.defer()
-    if not interaction.message.reference:
-        await interaction.followup.send("You need to reply to a message to quote it", ephemeral=True)
+
+    if not message_id.isdigit():
+        await interaction.followup.send("Message not found", ephemeral=True)
+        return
+    
+    message = await interaction.channel.fetch_message(int(message_id))
+    print("msg obj", message)
+    print("msg type", message.type)
+
+    if not message:
+        await interaction.followup.send("Message not found", ephemeral=True)
         return
 
-    message = await interaction.channel.fetch_message(interaction.message.reference.message_id)
-    if not interaction.author.guild_permissions.administrator:
+    if not interaction.user.guild_permissions.administrator:
         await interaction.followup.send("You need to be an administrator to run this command", ephemeral=True)
         return
+    
+    print(f"Quoting message: {message.content}")
+    if not message.content:
+        await interaction.followup.send("Message has no content", ephemeral=True)
+        return
+
     embed = discord.Embed(title="Quote of the day", description=message.content)
-    embed.set_author(name=message.author.display_name, icon_url=message.author.avatar_url)
+    embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
 
     channel = db.get_database(DATABASE).get_collection("guilds").find_one({"_id": interaction.guild.id})
     if not channel:
         await interaction.followup.send("Channel not set", ephemeral=True)
         return
 
-    channel = bot.get_channel(channel["channel"])
+    channel = bot.get_channel(channel["channel_id"])
     if not channel:
         await interaction.followup.send("Channel not found", ephemeral=True)
         return
@@ -144,7 +161,27 @@ async def quote(interaction: discord.Interaction):
         return
     
     await channel.send(embed=embed)
+
+    await interaction.followup.send("Quoted message")
     
+
+@bot.tree.command(name="force_quote", description="force scheduled quote")
+async def force_quote(interaction: discord.Interaction):
+    await interaction.response.defer()
+    
+    channel = db.get_database(DATABASE).get_collection("guilds").find_one({"_id": interaction.guild.id})
+    if not channel:
+        await interaction.followup.send("Channel not set", ephemeral=True)
+        return
+    
+    channel = bot.get_channel(channel["channel_id"])
+    if not channel:
+        await interaction.followup.send("Channel not found", ephemeral=True)
+        return
+
+    await bot.post_quote(channel)
+
+    await interaction.followup.send("Forced quote")
 
 if __name__ == "__main__":
     bot.run(TOKEN)
