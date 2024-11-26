@@ -168,6 +168,11 @@ async def quote(interaction: discord.Interaction, message_id: str):
 @bot.tree.command(name="force_quote", description="force scheduled quote")
 async def force_quote(interaction: discord.Interaction):
     await interaction.response.defer()
+
+    # check if user is admin
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.followup.send("You need to be an administrator to run this command", ephemeral=True)
+        return
     
     channel = db.get_database(DATABASE).get_collection("guilds").find_one({"_id": interaction.guild.id})
     if not channel:
