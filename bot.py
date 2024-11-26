@@ -10,6 +10,7 @@ load_dotenv()
 
 TOKEN = os.getenv('TOKEN')
 
+DATABASE = os.getenv('MONGO_DATABASE')
 USERNAME = os.getenv('MONGO_USERNAME')
 PASSWORD = os.getenv('MONGO_PASSWORD')
 CLUSTER = os.getenv('MONGO_CLUSTER')
