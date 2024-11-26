@@ -108,7 +108,7 @@ async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
         await interaction.followup.send("I don't have permission to send messages in that channel", ephemeral=True)
         return
 
-    db.get_database(DATABASE).get_collection("guilds").update_one({"_id": interaction.guild.id}, {"$set": {"channel": channel.id}}, upsert=True)
+    db.get_database(DATABASE).get_collection("guilds").update_one({"_id": interaction.guild.id}, {"$set": {"channel_id": channel.id}}, upsert=True)
     await interaction.followup.send(f"Set channel to {channel.mention}")
 
     scheduler.remove_job(interaction.guild.id)
