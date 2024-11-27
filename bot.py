@@ -36,16 +36,20 @@ class Client(discord.Client):
         except Exception as error:
             print(f'Failed to sync commands, error: {error}')
             exit(1)
-        
+
+        scheduler.start()
+        print("Scheduler started")
+
         # grab all guilds from channel and schedule to run at 12 am
         guilds = db.get_database(DATABASE).get_collection("guilds").find()
         for guild in guilds:
             channel = self.get_channel(guild["channel_id"])
             if not channel:
                 continue
-            scheduler.add_job(self.post_quote, CronTrigger(hour=0, minute=0), args=[channel], id=str(guild["_id"]))
+            scheduler.add_job(self.post_quote, CronTrigger(hour=23, minute=50), args=[channel], id=str(guild["_id"]))
 
     async def post_quote(self, channel: discord.TextChannel):
+        print("POSTING QUOTE")
         # quotes table -> guild_id, channel_id, message_id, reaction_count
         message_id = db.get_database(DATABASE).get_collection("quotes").find_one({"_id": channel.guild.id})
         if not message_id:
@@ -65,8 +69,7 @@ class Client(discord.Client):
 
         # start new timer
         # TODO: check if this works 
-        scheduler.add_job(self.post_quote, CronTrigger(hour=0, minute=0), args=[channel])
-        scheduler.start()
+        scheduler.add_job(self.post_quote, CronTrigger(hour=23, minute=50), args=[channel])
     
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         if payload.user_id == self.user.id:
@@ -116,7 +119,7 @@ async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
         scheduler.remove_job(str(interaction.guild.id))
     except JobLookupError:
         pass
-    scheduler.add_job(bot.post_quote, CronTrigger(hour=0, minute=0), args=[channel], id=str(interaction.guild.id))
+    scheduler.add_job(bot.post_quote, CronTrigger(hour=23, minute=50), args=[channel], id=str(interaction.guild.id))
     
 @bot.tree.command(name="quote", description="Quote a message")
 async def quote(interaction: discord.Interaction, message_id: str):
@@ -183,10 +186,36 @@ async def force_quote(interaction: discord.Interaction):
     if not channel:
         await interaction.followup.send("Channel not found", ephemeral=True)
         return
+    
+    try:
+        scheduler.remove_job(str(interaction.guild.id))
+    except JobLookupError:
+        pass
 
     await bot.post_quote(channel)
 
     await interaction.followup.send("Forced quote")
+
+@bot.tree.command(name="debug_schedule", description="schedule quote")
+async def debug_schedule(interaction: discord.Interaction, seconds: int):
+    await interaction.response.defer()
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.followup.send("You need to be an administrator to run this command", ephemeral=True)
+        return
+    # get channel
+    channel = db.get_database(DATABASE).get_collection("guilds").find_one({"_id": interaction.guild.id})
+    if not channel:
+        await interaction.followup.send("Channel not set", ephemeral=True)
+        return
+
+    channel = bot.get_channel(channel["channel_id"])
+    if not channel:
+        await interaction.followup.send("Channel not found", ephemeral=True)
+        return
+    
+    scheduler.add_job(bot.post_quote, CronTrigger(second=seconds), args=[channel])
+
+    await interaction.followup.send("Scheduled quote")
 
 if __name__ == "__main__":
     bot.run(TOKEN)
