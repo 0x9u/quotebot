@@ -5,6 +5,7 @@ from pymongo import MongoClient
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.jobstores.base import JobLookupError
+from apscheduler.triggers.interval import IntervalTrigger
 import os
 
 load_dotenv()
@@ -46,7 +47,7 @@ class Client(discord.Client):
             channel = self.get_channel(guild["channel_id"])
             if not channel:
                 continue
-            scheduler.add_job(self.post_quote, CronTrigger(hour=23, minute=50), args=[channel], id=str(guild["_id"]))
+            scheduler.add_job(self.post_quote, trigger=IntervalTrigger(hour=23, minute=50), args=[channel], id=str(guild["_id"]))
 
     async def post_quote(self, channel: discord.TextChannel):
         print("POSTING QUOTE")
@@ -66,17 +67,13 @@ class Client(discord.Client):
         message = await channel.send(embed=embed)
 
         db.get_database(DATABASE).get_collection("quotes").delete_one({"_id": channel.guild.id})
-
-        # start new timer
-        # TODO: check if this works 
-        scheduler.add_job(self.post_quote, CronTrigger(hour=23, minute=50), args=[channel])
     
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         if payload.user_id == self.user.id:
             return
         
         message = await self.get_channel(payload.channel_id).fetch_message(payload.message_id)
-        if message.author == self.user:
+        if message.author == self.user or message.content == "":
             return
 
         # grab quote from guild
@@ -119,7 +116,8 @@ async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
         scheduler.remove_job(str(interaction.guild.id))
     except JobLookupError:
         pass
-    scheduler.add_job(bot.post_quote, CronTrigger(hour=23, minute=50), args=[channel], id=str(interaction.guild.id))
+    # generate a interval
+    scheduler.add_job(bot.post_quote, trigger=IntervalTrigger(hour=23, minutes=50), args=[channel], id=str(interaction.guild.id))
     
 @bot.tree.command(name="quote", description="Quote a message")
 async def quote(interaction: discord.Interaction, message_id: str):
@@ -186,11 +184,6 @@ async def force_quote(interaction: discord.Interaction):
     if not channel:
         await interaction.followup.send("Channel not found", ephemeral=True)
         return
-    
-    try:
-        scheduler.remove_job(str(interaction.guild.id))
-    except JobLookupError:
-        pass
 
     await bot.post_quote(channel)
 
