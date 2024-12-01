@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.jobstores.base import JobLookupError
 from apscheduler.triggers.interval import IntervalTrigger
 import os
+import datetime
 
 load_dotenv()
 
@@ -22,6 +22,8 @@ CONNECTION_STRING = f"mongodb+srv://{USERNAME}:{PASSWORD}@{CLUSTER}/?retryWrites
 
 db = MongoClient(CONNECTION_STRING)
 scheduler = AsyncIOScheduler()
+
+start_date = datetime.datetime.now().replace(hour=21, minute=0, second=0, microsecond=0)
 
 class Client(discord.Client):
     def __init__(self):
@@ -47,7 +49,7 @@ class Client(discord.Client):
             channel = self.get_channel(guild["channel_id"])
             if not channel:
                 continue
-            scheduler.add_job(self.post_quote, trigger=IntervalTrigger(hour=23, minute=50), args=[channel], id=str(guild["_id"]))
+            scheduler.add_job(self.post_quote, trigger=IntervalTrigger(hours=24), start_date=start_date, args=[channel], id=str(guild["_id"]))
 
     async def post_quote(self, channel: discord.TextChannel):
         print("POSTING QUOTE")
@@ -112,12 +114,8 @@ async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
     db.get_database(DATABASE).get_collection("guilds").update_one({"_id": interaction.guild.id}, {"$set": {"channel_id": channel.id}}, upsert=True)
     await interaction.followup.send(f"Set channel to {channel.mention}")
 
-    try:
-        scheduler.remove_job(str(interaction.guild.id))
-    except JobLookupError:
-        pass
     # generate a interval
-    scheduler.add_job(bot.post_quote, trigger=IntervalTrigger(hour=23, minutes=50), args=[channel], id=str(interaction.guild.id))
+    scheduler.add_job(bot.post_quote, trigger=IntervalTrigger(hours=24), args=[channel], id=str(interaction.guild.id), start_date=start_date, replace_existing=True)
     
 @bot.tree.command(name="quote", description="Quote a message")
 async def quote(interaction: discord.Interaction, message_id: str):
