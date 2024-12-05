@@ -78,6 +78,9 @@ class Client(discord.Client):
         if message.author == self.user or message.content == "":
             return
 
+        if message.created_at.day != datetime.datetime.now().day:
+            return
+
         # grab quote from guild
         quote = db.get_database(DATABASE).get_collection("quotes").find_one({"_id": message.guild.id})
         
