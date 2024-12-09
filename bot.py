@@ -65,6 +65,15 @@ class Client(discord.Client):
         if not message:
             return
         embed = discord.Embed(title="Quote of the day", description=message.content)
+        # get reactions used
+        reactions = message.reactions
+        # get count of each reaction
+        reaction_count = {reaction.emoji: reaction.count for reaction in reactions}
+        # sort by count
+        reaction_count = dict(sorted(reaction_count.items(), key=lambda item: item[1], reverse=True))
+        # add reactions to embed
+        for reaction, count in reaction_count.items():
+            embed.add_field(name=reaction, value=count, inline=True)
         embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
         message = await channel.send(embed=embed)
 
