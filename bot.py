@@ -160,9 +160,9 @@ async def quote(interaction: discord.Interaction, message_id: str):
         return
     
     print(f"Quoting message: {message.content}")
-    if not message.content:
-        await interaction.followup.send("Message has no content", ephemeral=True)
-        return
+    # if not message.content:
+    #     await interaction.followup.send("Message has no content", ephemeral=True)
+    #     return
 
     channel = db.get_database(DATABASE).get_collection("guilds").find_one({"_id": interaction.guild.id})
     if not channel:
