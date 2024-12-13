@@ -9,6 +9,7 @@ import os
 import datetime
 import pytz
 import logging
+import sys
 
 load_dotenv()
 
@@ -225,6 +226,18 @@ async def debug_schedule(interaction: discord.Interaction, seconds: int):
     scheduler.add_job(bot.post_quote, CronTrigger(second=seconds), args=[channel])
 
     await interaction.followup.send("Scheduled quote")
+
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        # Let KeyboardInterrupt through
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+# Override the default exception handler
+sys.excepthook = handle_exception
+
 
 if __name__ == "__main__":
     bot.run(TOKEN)
