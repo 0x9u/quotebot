@@ -160,9 +160,6 @@ async def quote(interaction: discord.Interaction, message_id: str):
         await interaction.followup.send("Message has no content", ephemeral=True)
         return
 
-    embed = discord.Embed(title="Quote of the day", description=message.content)
-    embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
-
     channel = db.get_database(DATABASE).get_collection("guilds").find_one({"_id": interaction.guild.id})
     if not channel:
         await interaction.followup.send("Channel not set", ephemeral=True)
@@ -177,7 +174,7 @@ async def quote(interaction: discord.Interaction, message_id: str):
         await interaction.followup.send("I don't have permission to send messages in that channel", ephemeral=True)
         return
     
-    await channel.send(embed=embed)
+    await bot.post_quote(channel)
 
     await interaction.followup.send("Quoted message")
     
