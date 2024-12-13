@@ -84,6 +84,12 @@ class Client(discord.Client):
         if message.attachments and message.attachments[0].filename.endswith((".png", ".jpg", ".jpeg", ".gif")):
             embed.set_image(url=message.attachments[0].url)
         message = await channel.send(embed=embed)
+        # open thread
+        try:
+            thread = await message.create_thread(name="Discussion")
+            await thread.send(".")
+        except Exception as e:
+            print("Failed to create thread", e)
         
         if use_db:
             db.get_database(DATABASE).get_collection("quotes").delete_one({"_id": channel.guild.id})
