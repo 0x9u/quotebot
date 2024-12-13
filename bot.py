@@ -68,6 +68,7 @@ class Client(discord.Client):
             return
         embed = discord.Embed(title="Quote of the day", description=message.content)
         reactions = message.reactions
+        print("Reactions:", reactions)
         if reactions:
             reaction_count = {reaction.emoji: reaction.count for reaction in reactions}
             reaction_count = dict(sorted(reaction_count.items(), key=lambda item: item[1], reverse=True))
