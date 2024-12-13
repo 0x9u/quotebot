@@ -69,7 +69,7 @@ class Client(discord.Client):
         message = await message_channel.fetch_message(message_id["message_id"]) if use_db else message
         if not message:
             return
-        embed = discord.Embed(title="Quote of the day", description=message.content)
+        embed = discord.Embed(title="Quote of the day", description=f"{message.content}\n[Jump to message]({message.jump_url})", color=discord.Color.blue())
         reactions = message.reactions
         print("Reactions:", reactions)
         if reactions:
