@@ -10,6 +10,7 @@ import datetime
 import pytz
 import logging
 import sys
+import traceback
 
 load_dotenv()
 
@@ -59,36 +60,38 @@ class Client(discord.Client):
 
     async def post_quote(self, channel: discord.TextChannel):
         print("POSTING QUOTE")
-        # quotes table -> guild_id, channel_id, message_id, reaction_count
-        message_id = db.get_database(DATABASE).get_collection("quotes").find_one({"_id": channel.guild.id})
-        if not message_id:
-            return
-        
-        message_channel = self.get_channel(message_id["channel_id"])
-        if not message_channel:
-            return
-        message = await message_channel.fetch_message(message_id["message_id"])
-        if not message:
-            return
-        embed = discord.Embed(title="Quote of the day", description=message.content)
-        reactions = message.reactions
-        print("Reactions:", reactions)
-        if reactions:
-            reaction_count = {reaction.emoji: reaction.count for reaction in reactions}
-            reaction_count = dict(sorted(reaction_count.items(), key=lambda item: item[1], reverse=True))
-            print(f"Reactions: {reaction_count}")
-            
-            for reaction, count in reaction_count.items():
-                embed.add_field(name=reaction, value=f"{count}", inline=True)
-        else:
-            print("No reactions found.")
-        embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
-        if message.attachments and message.attachments[0].filename.endswith((".png", ".jpg", ".jpeg", ".gif")):
-            embed.set_image(url=message.attachments[0].url)
-        message = await channel.send(embed=embed)
+        try:
+            # quotes table -> guild_id, channel_id, message_id, reaction_count
+            message_id = db.get_database(DATABASE).get_collection("quotes").find_one({"_id": channel.guild.id})
+            if not message_id:
+                return
 
-        db.get_database(DATABASE).get_collection("quotes").delete_one({"_id": channel.guild.id})
-    
+            message_channel = self.get_channel(message_id["channel_id"])
+            if not message_channel:
+                return
+            message = await message_channel.fetch_message(message_id["message_id"])
+            if not message:
+                return
+            embed = discord.Embed(title="Quote of the day", description=message.content)
+            reactions = message.reactions
+            print("Reactions:", reactions)
+            if reactions:
+                reaction_count = {reaction.emoji: reaction.count for reaction in reactions}
+                reaction_count = dict(sorted(reaction_count.items(), key=lambda item: item[1], reverse=True))
+                print(f"Reactions: {reaction_count}")
+
+                for reaction, count in reaction_count.items():
+                    embed.add_field(name=reaction, value=f"{count}", inline=True)
+            else:
+                print("No reactions found.")
+            embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
+            if message.attachments and message.attachments[0].filename.endswith((".png", ".jpg", ".jpeg", ".gif")):
+                embed.set_image(url=message.attachments[0].url)
+            message = await channel.send(embed=embed)
+
+            db.get_database(DATABASE).get_collection("quotes").delete_one({"_id": channel.guild.id})
+        except:
+            print(traceback.format_exc())
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         if payload.user_id == self.user.id:
             return
