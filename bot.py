@@ -7,6 +7,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 import os
 import datetime
+import pytz
 
 load_dotenv()
 
@@ -23,7 +24,8 @@ CONNECTION_STRING = f"mongodb+srv://{USERNAME}:{PASSWORD}@{CLUSTER}/?retryWrites
 db = MongoClient(CONNECTION_STRING)
 scheduler = AsyncIOScheduler()
 
-start_date = datetime.datetime.now().replace(hour=21, minute=0, second=0, microsecond=0)
+australian_timezone = pytz.timezone("Australia/Sydney")
+start_date = datetime.datetime.now(australian_timezone).replace(hour=21, minute=0, second=0, microsecond=0)
 
 class Client(discord.Client):
     def __init__(self):
@@ -73,8 +75,10 @@ class Client(discord.Client):
         reaction_count = dict(sorted(reaction_count.items(), key=lambda item: item[1], reverse=True))
         # add reactions to embed
         for reaction, count in reaction_count.items():
-            embed.add_field(name=reaction, value=count, inline=True)
+            embed.add_field(name=reaction, value=f"{count}", inline=True)
         embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
+        if message.attachments and message.attachments[0].filename.endswith((".png", ".jpg", ".jpeg", ".gif")):
+            embed.set_image(url=message.attachments[0].url)
         message = await channel.send(embed=embed)
 
         db.get_database(DATABASE).get_collection("quotes").delete_one({"_id": channel.guild.id})
@@ -87,7 +91,7 @@ class Client(discord.Client):
         if message.author == self.user or message.content == "":
             return
 
-        if message.created_at.day != datetime.datetime.now().day:
+        if message.created_at.day != datetime.datetime.now(datetime.timezone.utc).day:
             return
 
         # grab quote from guild
