@@ -57,13 +57,13 @@ class Client(discord.Client):
                 continue
             scheduler.add_job(self.post_quote, trigger=IntervalTrigger(hours=24), start_date=start_date, args=[channel], id=str(guild["_id"]))
 
-    async def post_quote(self, channel: discord.TextChannel, message_id = None, use_db=True):
+    async def post_quote(self, channel: discord.TextChannel, channel_id = None, message_id = None, use_db=True):
         print("POSTING QUOTE")
         # quotes table -> guild_id, channel_id, message_id, reaction_count
         message_id = db.get_database(DATABASE).get_collection("quotes").find_one({"_id": channel.guild.id})
         if not message_id and use_db:
             return
-        message_channel = self.get_channel(message_id["channel_id"])
+        message_channel = self.get_channel(message_id["channel_id"] if use_db else channel_id)
         if not message_channel:
             return
         message = await message_channel.fetch_message(message_id["message_id"] if use_db else message_id)
@@ -176,7 +176,7 @@ async def quote(interaction: discord.Interaction, message_id: str):
         await interaction.followup.send("I don't have permission to send messages in that channel", ephemeral=True)
         return
     
-    await bot.post_quote(channel, message_id=message.id, use_db=False)
+    await bot.post_quote(channel, channel_id=channel.id, message_id=message.id, use_db=False)
 
     await interaction.followup.send("Quoted message")
     
