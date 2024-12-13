@@ -67,15 +67,16 @@ class Client(discord.Client):
         if not message:
             return
         embed = discord.Embed(title="Quote of the day", description=message.content)
-        # get reactions used
         reactions = message.reactions
-        # get count of each reaction
-        reaction_count = {reaction.emoji: reaction.count for reaction in reactions}
-        # sort by count
-        reaction_count = dict(sorted(reaction_count.items(), key=lambda item: item[1], reverse=True))
-        # add reactions to embed
-        for reaction, count in reaction_count.items():
-            embed.add_field(name=reaction, value=f"{count}", inline=True)
+        if reactions:
+            reaction_count = {reaction.emoji: reaction.count for reaction in reactions}
+            reaction_count = dict(sorted(reaction_count.items(), key=lambda item: item[1], reverse=True))
+            print(f"Reactions: {reaction_count}")
+            
+            for reaction, count in reaction_count.items():
+                embed.add_field(name=reaction, value=f"{count}", inline=True)
+        else:
+            print("No reactions found.")
         embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
         if message.attachments and message.attachments[0].filename.endswith((".png", ".jpg", ".jpeg", ".gif")):
             embed.set_image(url=message.attachments[0].url)
