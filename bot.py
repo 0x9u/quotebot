@@ -8,6 +8,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 import os
 import datetime
 import pytz
+import logging
 
 load_dotenv()
 
@@ -26,6 +27,8 @@ scheduler = AsyncIOScheduler()
 
 australian_timezone = pytz.timezone("Australia/Sydney")
 start_date = datetime.datetime.now(australian_timezone).replace(hour=21, minute=0, second=0, microsecond=0)
+
+logging.basicConfig(level=logging.ERROR)
 
 class Client(discord.Client):
     def __init__(self):
