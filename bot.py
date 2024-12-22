@@ -80,7 +80,7 @@ class Client(discord.Client):
                 embed.add_field(name=reaction, value=f"{count}", inline=True)
         else:
             print("No reactions found.")
-        embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
+        embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url if message.author.avatar is not None else None)
         if message.attachments and message.attachments[0].filename.endswith((".png", ".jpg", ".jpeg", ".gif")):
             embed.set_image(url=message.attachments[0].url)
         message = await channel.send(embed=embed)
@@ -94,7 +94,7 @@ class Client(discord.Client):
                 await thread.send(".")
             except Exception as e:
                 print("Failed to create thread", e)
-            
+
         if use_db:
             db.get_database(DATABASE).get_collection("quotes").delete_one({"_id": channel.guild.id})
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
