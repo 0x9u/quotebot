@@ -84,13 +84,17 @@ class Client(discord.Client):
         if message.attachments and message.attachments[0].filename.endswith((".png", ".jpg", ".jpeg", ".gif")):
             embed.set_image(url=message.attachments[0].url)
         message = await channel.send(embed=embed)
-        # open thread
-        try:
-            thread = await message.create_thread(name="Discussion")
-            await thread.send(".")
-        except Exception as e:
-            print("Failed to create thread", e)
-        
+
+        # check if threads are enabled
+        guild = db.get_database(DATABASE).get_collection("guilds").find_one({"_id": channel.guild.id})
+        if guild and guild["threads"]:
+            # open thread
+            try:
+                thread = await message.create_thread(name="Discussion")
+                await thread.send(".")
+            except Exception as e:
+                print("Failed to create thread", e)
+            
         if use_db:
             db.get_database(DATABASE).get_collection("quotes").delete_one({"_id": channel.guild.id})
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
@@ -137,12 +141,27 @@ async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
         await interaction.followup.send("I don't have permission to send messages in that channel", ephemeral=True)
         return
 
-    db.get_database(DATABASE).get_collection("guilds").update_one({"_id": interaction.guild.id}, {"$set": {"channel_id": channel.id}}, upsert=True)
+    db.get_database(DATABASE).get_collection("guilds").update_one({"_id": interaction.guild.id}, {"$set": {"channel_id": channel.id, "threads" : True }}, upsert=True)
     await interaction.followup.send(f"Set channel to {channel.mention}")
 
     # generate a interval
     scheduler.add_job(bot.post_quote, trigger=IntervalTrigger(hours=24), args=[channel], id=str(interaction.guild.id), start_date=start_date, replace_existing=True)
     
+@bot.tree.command(name="toggle_threads", description="Toggle threads")
+async def toggle_threads(interaction: discord.Interaction, toggle: bool):
+    await interaction.response.defer()
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.followup.send("You need to be an administrator to run this command", ephemeral=True)
+        return
+    
+    channel = db.get_database(DATABASE).get_collection("guilds").find_one({"_id": interaction.guild.id})
+    if not channel:
+        await interaction.followup.send("Channel not set", ephemeral=True)
+        return
+
+    db.get_database(DATABASE).get_collection("guilds").update_one({"_id": interaction.guild.id}, {"$set": {"threads" : toggle }}, upsert=True)
+    await interaction.followup.send(f"Threads set to {toggle}")
+
 @bot.tree.command(name="quote", description="Quote a message")
 async def quote(interaction: discord.Interaction, message_id: str):
     await interaction.response.defer()
