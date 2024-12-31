@@ -10,6 +10,7 @@ import datetime
 import pytz
 import logging
 import sys
+import re
 
 load_dotenv()
 
@@ -30,6 +31,8 @@ australian_timezone = pytz.timezone("Australia/Sydney")
 start_date = datetime.datetime.now(australian_timezone).replace(hour=21, minute=0, second=0, microsecond=0)
 
 logging.basicConfig(level=logging.ERROR)
+
+IMAGE_REGEX = re.compile(r"(https?://[^\s]+(?:\.(?:png|jpg|jpeg|gif|webp))(?:\?[^\s]*)?)")
 
 class Client(discord.Client):
     def __init__(self):
@@ -81,8 +84,11 @@ class Client(discord.Client):
         else:
             print("No reactions found.")
         embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url if message.author.avatar is not None else None)
+        image_links = IMAGE_REGEX.findall(message.content)
         if message.attachments and message.attachments[0].filename.endswith((".png", ".jpg", ".jpeg", ".gif")):
             embed.set_image(url=message.attachments[0].url)
+        elif image_links:
+            embed.set_image(url=image_links[0])
         message = await channel.send(embed=embed)
 
         # check if threads are enabled
