@@ -27,8 +27,8 @@ CONNECTION_STRING = f"mongodb+srv://{USERNAME}:{PASSWORD}@{CLUSTER}/?retryWrites
 db = MongoClient(CONNECTION_STRING)
 scheduler = AsyncIOScheduler()
 
-australian_timezone = pytz.timezone("Australia/Sydney")
-start_date = datetime.datetime.now(australian_timezone).replace(
+AUSTRALIAN_TIMEZONE = pytz.timezone("Australia/Sydney")
+START_DATE = datetime.datetime.now(AUSTRALIAN_TIMEZONE).replace(
     hour=21, minute=0, second=0, microsecond=0
 )
 
@@ -64,8 +64,7 @@ class Client(discord.Client):
                 continue
             scheduler.add_job(
                 self.post_quote,
-                trigger=IntervalTrigger(hours=24),
-                start_date=start_date,
+                trigger=CronTrigger(hours=21, minute=0, timezone=AUSTRALIAN_TIMEZONE),
                 args=[channel],
                 id=str(guild["_id"]),
             )
@@ -154,9 +153,9 @@ class Client(discord.Client):
             return
         message_created_time = message.created_at.replace(
             tzinfo=datetime.timezone.utc
-        ).astimezone(australian_timezone)
-        now_time = datetime.datetime.now(australian_timezone)
-        
+        ).astimezone(AUSTRALIAN_TIMEZONE)
+        now_time = datetime.datetime.now(AUSTRALIAN_TIMEZONE)
+
         if (
             message_created_time.day != now_time.day
             or message_created_time.year != now_time.year
@@ -190,6 +189,18 @@ class Client(discord.Client):
                     "message_id": message.id,
                     "reaction_count": reaction_count,
                 }
+            )
+    async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
+        if payload.guild_id is None:
+            return
+        quote = (
+            db.get_database(DATABASE)
+            .get_collection("quotes")
+            .find_one({"_id": payload.guild_id})
+        )
+        if quote and quote["message_id"] == payload.message_id:
+            db.get_database(DATABASE).get_collection("quotes").delete_one(
+                {"_id": payload.guild_id}
             )
 
 
@@ -231,10 +242,9 @@ async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
     # generate a interval
     scheduler.add_job(
         bot.post_quote,
-        trigger=IntervalTrigger(hours=24),
+        trigger=CronTrigger(hours=21, minute=0, timezone=AUSTRALIAN_TIMEZONE),
         args=[channel],
         id=str(interaction.guild.id),
-        start_date=start_date,
         replace_existing=True,
     )
 
