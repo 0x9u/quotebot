@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.date import DateTrigger
 import os
 import datetime
 import pytz
@@ -64,7 +64,7 @@ class Client(discord.Client):
                 continue
             scheduler.add_job(
                 self.post_quote,
-                trigger=CronTrigger(hours=21, minute=0, timezone=AUSTRALIAN_TIMEZONE),
+                trigger=CronTrigger(hour=21, minute=0, timezone=AUSTRALIAN_TIMEZONE),
                 args=[channel],
                 id=str(guild["_id"]),
             )
@@ -190,6 +190,7 @@ class Client(discord.Client):
                     "reaction_count": reaction_count,
                 }
             )
+
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
         if payload.guild_id is None:
             return
@@ -242,7 +243,7 @@ async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
     # generate a interval
     scheduler.add_job(
         bot.post_quote,
-        trigger=CronTrigger(hours=21, minute=0, timezone=AUSTRALIAN_TIMEZONE),
+        trigger=CronTrigger(hour=21, minute=0, timezone=AUSTRALIAN_TIMEZONE),
         args=[channel],
         id=str(interaction.guild.id),
         replace_existing=True,
@@ -378,7 +379,14 @@ async def debug_schedule(interaction: discord.Interaction, seconds: int):
         await interaction.followup.send("Channel not found", ephemeral=True)
         return
 
-    scheduler.add_job(bot.post_quote, CronTrigger(second=seconds), args=[channel])
+    scheduler.add_job(
+        bot.post_quote,
+        DateTrigger(
+            run_date=datetime.datetime.now() + datetime.timedelta(seconds=seconds),
+            timezone=AUSTRALIAN_TIMEZONE,
+        ),
+        args=[channel],
+    )
 
     await interaction.followup.send("Scheduled quote")
 
