@@ -84,11 +84,19 @@ class Client(discord.Client):
         message_channel = self.get_channel(message_id["channel_id"]) if use_db else None
         if not message_channel and use_db:
             return
-        message = (
-            await message_channel.fetch_message(message_id["message_id"])
-            if use_db
-            else message
-        )
+        try:
+            message = (
+                await message_channel.fetch_message(message_id["message_id"])
+                if use_db
+                else message
+            )
+        except discord.NotFound:
+            if use_db:
+                db.get_database(DATABASE).get_collection("quotes").delete_one(
+                    {"_id": channel.guild.id}
+                )
+            return
+        
         if not message:
             return
         embed = discord.Embed(
