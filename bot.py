@@ -410,6 +410,10 @@ async def next_quote(interaction: discord.Interaction):
                 {"_id": interaction.guild_id}
             )
         )
+    if quote is None:
+        await interaction.followup.send("No quotes found", ephemeral=True)
+        return
+    
     message_channel = bot.get_channel(quote["channel_id"])
     if not message_channel:
         await interaction.followup.send("Channel not found for this quote", ephemeral=True)
