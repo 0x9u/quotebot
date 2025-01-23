@@ -423,7 +423,7 @@ async def next_quote(interaction: discord.Interaction):
         await interaction.followup.send("Message not found for this quote", ephemeral=True)
         return
 
-    await bot.post_quote(message_channel, message, use_db=False)
+    await bot.post_quote(interaction.channel, message, use_db=False)
     
     await interaction.followup.send("Next quote")
 
