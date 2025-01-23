@@ -180,9 +180,7 @@ class Client(discord.Client):
         
         # check if quote is outdated
         if quote:
-            quote_created_time = datetime.datetime.fromisoformat(
-                quote["created_at"]
-            ).replace(tzinfo=datetime.timezone.utc)
+            quote_created_time = quote["created_at"]
             if quote_created_time.day != now_time.day:
                 db.get_database(DATABASE).get_collection("quotes").delete_one(
                     {"_id": message.guild.id}
