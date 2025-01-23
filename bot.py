@@ -180,7 +180,7 @@ class Client(discord.Client):
         
         # check if quote is outdated
         if quote:
-            quote_created_time = datetime.datetime.fromtimestamp(
+            quote_created_time = datetime.datetime.fromisoformat(
                 quote["created_at"]
             ).replace(tzinfo=datetime.timezone.utc)
             if quote_created_time.day != now_time.day:
@@ -413,25 +413,19 @@ async def next_quote(interaction: discord.Interaction):
     if quote is None:
         await interaction.followup.send("No quotes found", ephemeral=True)
         return
-    
+
     message_channel = bot.get_channel(quote["channel_id"])
     if not message_channel:
         await interaction.followup.send("Channel not found for this quote", ephemeral=True)
         return
 
     try:
-        message = (
-            await message_channel.fetch_message(quote["message_id"])
-        )
+        message = await message_channel.fetch_message(quote["message_id"])
     except discord.NotFound:
-        await interaction.followup.send("Quote not found (probs deleted).", ephemeral=True)
+        await interaction.followup.send("Message not found for this quote", ephemeral=True)
         return
-        
-    embed = discord.Embed(
-        title="Next quote",
-        description=f"{message.content}\n\n[Jump to message]({message.jump_url})",)
 
-    await interaction.followup.send(embed=embed)
+    await bot.post_quote(message_channel, message, use_db=False)
 
 
 @bot.tree.command(name="debug_schedule", description="schedule quote")
