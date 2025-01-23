@@ -403,6 +403,12 @@ async def force_quote(interaction: discord.Interaction):
 @bot.tree.command(name="next_quote", description="See next quote.")
 async def next_quote(interaction: discord.Interaction):
     await interaction.response.defer()
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.followup.send(
+            "You need to be an administrator to run this command", ephemeral=True
+        )
+        return
+
     quote = (
         db.get_database(DATABASE).get_collection("quotes").find_one(
                 {"_id": interaction.guild_id}
