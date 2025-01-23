@@ -207,6 +207,7 @@ class Client(discord.Client):
                     "channel_id": message.channel.id,
                     "message_id": message.id,
                     "reaction_count": reaction_count,
+                    "created_at" : message.created_at,
                 }
             )
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
@@ -400,6 +401,33 @@ async def force_quote(interaction: discord.Interaction):
     await bot.post_quote(channel)
 
     await interaction.followup.send("Forced quote")
+
+@bot.tree.command(name="next_quote", description="See next quote.")
+async def next_quote(interaction: discord.Interaction):
+    await interaction.response.defer()
+    quote = (
+        db.get_database(DATABASE).get_collection("quotes").find_one(
+                {"_id": interaction.guild_id}
+            )
+        )
+    message_channel = bot.get_channel(quote["channel_id"])
+    if not message_channel:
+        await interaction.followup.send("Channel not found for this quote", ephemeral=True)
+        return
+
+    try:
+        message = (
+            await message_channel.fetch_message(quote["message_id"])
+        )
+    except discord.NotFound:
+        await interaction.followup.send("Quote not found (probs deleted).", ephemeral=True)
+        return
+        
+    embed = discord.Embed(
+        title="Next quote",
+        description=f"{message.content}\n\n[Jump to message]({message.jump_url})",)
+
+    await interaction.followup.send(embed=embed)
 
 
 @bot.tree.command(name="debug_schedule", description="schedule quote")
