@@ -177,6 +177,17 @@ class Client(discord.Client):
             .get_collection("quotes")
             .find_one({"_id": message.guild.id})
         )
+        
+        # check if quote is outdated
+        if quote:
+            quote_created_time = datetime.datetime.fromtimestamp(
+                quote["created_at"]
+            ).replace(tzinfo=datetime.timezone.utc)
+            if quote_created_time.day != now_time.day:
+                db.get_database(DATABASE).get_collection("quotes").delete_one(
+                    {"_id": message.guild.id}
+                )
+                quote = None
 
         # find count of greatest reaction count in message
         reaction_count = (
@@ -198,6 +209,33 @@ class Client(discord.Client):
                     "reaction_count": reaction_count,
                 }
             )
+    async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
+        message = await self.get_channel(payload.channel_id).fetch_message(
+            payload.message_id
+        )
+        if message.author == self.user or message.content == "":
+            return
+        quote = (
+            db.get_database(DATABASE)
+            .get_collection("quotes")
+            .find_one({"_id": message.guild.id})
+        )
+        if quote and quote["message_id"] == message.id:
+            reaction_count = (
+                max([reaction.count for reaction in message.reactions])
+                if message.reactions
+                else 0
+            )
+            if reaction_count < quote["reaction_count"]:
+                if reaction_count == 0:
+                    db.get_database(DATABASE).get_collection("quotes").delete_one(
+                        {"_id": message.guild.id}
+                    )
+                else:
+                    db.get_database(DATABASE).get_collection("quotes").update_one(
+                        {"_id": message.guild.id},
+                        {"$set": {"reaction_count": reaction_count}},
+                    )
 
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
         if payload.guild_id is None:
