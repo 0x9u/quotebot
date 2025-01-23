@@ -424,6 +424,8 @@ async def next_quote(interaction: discord.Interaction):
         return
 
     await bot.post_quote(message_channel, message, use_db=False)
+    
+    await interaction.followup.send("Next quote")
 
 
 @bot.tree.command(name="debug_schedule", description="schedule quote")
