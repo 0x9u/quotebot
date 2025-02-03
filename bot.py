@@ -351,13 +351,21 @@ async def add_blacklist(interaction: discord.Interaction, channel: discord.TextC
     if not channel:
         await interaction.followup.send("Channel not set", ephemeral=True)
         return
+    blacklist = (
+        db.get_database(DATABASE)
+        .get_collection("guilds")
+        .find_one({"_id": interaction.guild.id})
+    )
+    if channel["channel_id"] in blacklist["blacklist"]:
+        await interaction.followup.send("Channel already in blacklist", ephemeral=True)
+        return
 
     db.get_database(DATABASE).get_collection("guilds").update_one(
         {"_id": interaction.guild.id},
         {"$push": {"blacklist": channel["channel_id"]}},
         upsert=True,
     )
-    await interaction.followup.send(f"Added {channel.mention} to blacklist")
+    await interaction.followup.send(f"Added {channel.name} to blacklist")
 
 
 @bot.tree.command(name="remove_blacklist", description="Remove channel from blacklist")
