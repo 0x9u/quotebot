@@ -343,26 +343,27 @@ async def add_blacklist(interaction: discord.Interaction, channel: discord.TextC
         )
         return
 
-    channel = (
+    guild = (
         db.get_database(DATABASE)
         .get_collection("guilds")
         .find_one({"_id": interaction.guild.id})
     )
-    if not channel:
-        await interaction.followup.send("Channel not set", ephemeral=True)
+    if not guild:
+        await interaction.followup.send("Guild not setup", ephemeral=True)
         return
     blacklist = (
         db.get_database(DATABASE)
         .get_collection("guilds")
         .find_one({"_id": interaction.guild.id})
     )
-    if channel["channel_id"] in blacklist["blacklist"]:
+    
+    if channel.id in blacklist["blacklist"]:
         await interaction.followup.send("Channel already in blacklist", ephemeral=True)
         return
 
     db.get_database(DATABASE).get_collection("guilds").update_one(
         {"_id": interaction.guild.id},
-        {"$push": {"blacklist": channel["channel_id"]}},
+        {"$push": {"blacklist": channel.id}},
         upsert=True,
     )
     await interaction.followup.send(f"Added {channel.name} to blacklist")
@@ -377,24 +378,25 @@ async def remove_blacklist(interaction: discord.Interaction, channel: discord.Te
         )
         return
 
-    channel = (
+    guild = (
         db.get_database(DATABASE)
         .get_collection("guilds")
         .find_one({"_id": interaction.guild.id})
     )
-    if not channel:
-        await interaction.followup.send("Channel not set", ephemeral=True)
+    if not guild:
+        await interaction.followup.send("Guild not setup", ephemeral=True)
         return
-
+    
     channels = db.get_database(DATABASE).get_collection(
         "guilds").find_one({"_id": interaction.guild.id})["blacklist"]
-    if channel["channel_id"] not in channels:
+    
+    if channel.id not in channels:
         await interaction.followup.send(f"{channel.name} is not in the blacklist", ephemeral=True)
         return
 
     db.get_database(DATABASE).get_collection("guilds").update_one(
         {"_id": interaction.guild.id},
-        {"$pull": {"blacklist": channel["channel_id"]}},
+        {"$pull": {"blacklist": channel.id}},
         upsert=True,
     )
     await interaction.followup.send(f"Removed {channel.name} from blacklist")
