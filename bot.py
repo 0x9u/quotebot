@@ -22,7 +22,8 @@ PASSWORD = os.getenv("MONGO_PASSWORD")
 CLUSTER = os.getenv("MONGO_CLUSTER")
 APPNAME = os.getenv("MONGO_APPNAME")
 
-CONNECTION_STRING = f"mongodb+srv://{USERNAME}:{PASSWORD}@{CLUSTER}/?retryWrites=true&w=majority&appName={APPNAME}"
+CONNECTION_STRING = f"mongodb+srv://{USERNAME}:{PASSWORD}@{
+    CLUSTER}/?retryWrites=true&w=majority&appName={APPNAME}"
 
 db = MongoClient(CONNECTION_STRING)
 scheduler = AsyncIOScheduler()
@@ -64,7 +65,8 @@ class Client(discord.Client):
                 continue
             scheduler.add_job(
                 self.post_quote,
-                trigger=CronTrigger(hour=21, minute=0, timezone=AUSTRALIAN_TIMEZONE),
+                trigger=CronTrigger(hour=21, minute=0,
+                                    timezone=AUSTRALIAN_TIMEZONE),
                 args=[channel],
                 id=str(guild["_id"]),
             )
@@ -81,7 +83,8 @@ class Client(discord.Client):
         )
         if not message_id and use_db:
             return
-        message_channel = self.get_channel(message_id["channel_id"]) if use_db else None
+        message_channel = self.get_channel(
+            message_id["channel_id"]) if use_db else None
         if not message_channel and use_db:
             return
         try:
@@ -96,20 +99,23 @@ class Client(discord.Client):
                     {"_id": channel.guild.id}
                 )
             return
-        
+
         if not message:
             return
         embed = discord.Embed(
             title="Quote of the day",
-            description=f"{message.content}\n[Jump to message]({message.jump_url})",
+            description=f"{message.content}\n[Jump to message]({
+                message.jump_url})",
             color=discord.Color.blue(),
         )
         reactions = message.reactions
         print("Reactions:", reactions)
         if reactions:
-            reaction_count = {reaction.emoji: reaction.count for reaction in reactions}
+            reaction_count = {
+                reaction.emoji: reaction.count for reaction in reactions}
             reaction_count = dict(
-                sorted(reaction_count.items(), key=lambda item: item[1], reverse=True)
+                sorted(reaction_count.items(),
+                       key=lambda item: item[1], reverse=True)
             )
             print(f"Reactions: {reaction_count}")
             for reaction, count in reaction_count.items():
@@ -159,6 +165,14 @@ class Client(discord.Client):
         )
         if message.author == self.user or message.content == "":
             return
+        blacklist = (
+            db.get_database(DATABASE)
+            .get_collection("blacklist")
+            .find_one({"_id": message.guild.id})
+        )
+        if blacklist and payload.channel_id in blacklist["blacklist"]:
+            return
+        
         message_created_time = message.created_at.replace(
             tzinfo=datetime.timezone.utc
         ).astimezone(AUSTRALIAN_TIMEZONE)
@@ -177,7 +191,7 @@ class Client(discord.Client):
             .get_collection("quotes")
             .find_one({"_id": message.guild.id})
         )
-        
+
         # check if quote is outdated
         if quote:
             quote_created_time = quote["created_at"]
@@ -205,9 +219,10 @@ class Client(discord.Client):
                     "channel_id": message.channel.id,
                     "message_id": message.id,
                     "reaction_count": reaction_count,
-                    "created_at" : message.created_at,
+                    "created_at": message.created_at,
                 }
             )
+
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
         message = await self.get_channel(payload.channel_id).fetch_message(
             payload.message_id
@@ -280,7 +295,7 @@ async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
 
     db.get_database(DATABASE).get_collection("guilds").update_one(
         {"_id": interaction.guild.id},
-        {"$set": {"channel_id": channel.id, "threads": True}},
+        {"$set": {"channel_id": channel.id, "threads": True, "blacklist": []}},
         upsert=True,
     )
     await interaction.followup.send(f"Set channel to {channel.mention}")
@@ -319,6 +334,64 @@ async def toggle_threads(interaction: discord.Interaction, toggle: bool):
     await interaction.followup.send(f"Threads set to {toggle}")
 
 
+@bot.tree.command(name="add_blacklist", description="Add channel to blacklist")
+async def add_blacklist(interaction: discord.Interaction, channel: discord.TextChannel):
+    await interaction.response.defer()
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.followup.send(
+            "You need to be an administrator to run this command", ephemeral=True
+        )
+        return
+
+    channel = (
+        db.get_database(DATABASE)
+        .get_collection("guilds")
+        .find_one({"_id": interaction.guild.id})
+    )
+    if not channel:
+        await interaction.followup.send("Channel not set", ephemeral=True)
+        return
+
+    db.get_database(DATABASE).get_collection("guilds").update_one(
+        {"_id": interaction.guild.id},
+        {"$push": {"blacklist": channel["channel_id"]}},
+        upsert=True,
+    )
+    await interaction.followup.send(f"Added {channel.mention} to blacklist")
+
+
+@bot.tree.command(name="remove_blacklist", description="Remove channel from blacklist")
+async def remove_blacklist(interaction: discord.Interaction, channel: discord.TextChannel):
+    await interaction.response.defer()
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.followup.send(
+            "You need to be an administrator to run this command", ephemeral=True
+        )
+        return
+
+    channel = (
+        db.get_database(DATABASE)
+        .get_collection("guilds")
+        .find_one({"_id": interaction.guild.id})
+    )
+    if not channel:
+        await interaction.followup.send("Channel not set", ephemeral=True)
+        return
+
+    channels = db.get_database(DATABASE).get_collection(
+        "guilds").find_one({"_id": interaction.guild.id})["blacklist"]
+    if channel["channel_id"] not in channels:
+        await interaction.followup.send(f"{channel.mention} is not in the blacklist", ephemeral=True)
+        return
+
+    db.get_database(DATABASE).get_collection("guilds").update_one(
+        {"_id": interaction.guild.id},
+        {"$pull": {"blacklist": channel["channel_id"]}},
+        upsert=True,
+    )
+    await interaction.followup.send(f"Removed {channel.mention} from blacklist")
+
+
 @bot.tree.command(name="quote", description="Quote a message")
 async def quote(interaction: discord.Interaction, message_id: str):
     await interaction.response.defer()
@@ -328,8 +401,6 @@ async def quote(interaction: discord.Interaction, message_id: str):
         return
 
     message = await interaction.channel.fetch_message(int(message_id))
-    print("msg obj", message)
-    print("msg type", message.type)
 
     if not message:
         await interaction.followup.send("Message not found", ephemeral=True)
@@ -340,11 +411,6 @@ async def quote(interaction: discord.Interaction, message_id: str):
             "You need to be an administrator to run this command", ephemeral=True
         )
         return
-
-    print(f"Quoting message: {message.content}")
-    # if not message.content:
-    #     await interaction.followup.send("Message has no content", ephemeral=True)
-    #     return
 
     channel = (
         db.get_database(DATABASE)
@@ -400,6 +466,7 @@ async def force_quote(interaction: discord.Interaction):
 
     await interaction.followup.send("Forced quote")
 
+
 @bot.tree.command(name="next_quote", description="See next quote.")
 async def next_quote(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -411,9 +478,9 @@ async def next_quote(interaction: discord.Interaction):
 
     quote = (
         db.get_database(DATABASE).get_collection("quotes").find_one(
-                {"_id": interaction.guild_id}
-            )
+            {"_id": interaction.guild_id}
         )
+    )
     if quote is None:
         await interaction.followup.send("No quotes found", ephemeral=True)
         return
@@ -430,7 +497,7 @@ async def next_quote(interaction: discord.Interaction):
         return
 
     await bot.post_quote(interaction.channel, message, use_db=False)
-    
+
     await interaction.followup.send("Next quote")
 
 
@@ -474,7 +541,8 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         # Let KeyboardInterrupt through
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
-    logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+    logging.error("Uncaught exception", exc_info=(
+        exc_type, exc_value, exc_traceback))
 
 
 # Override the default exception handler
