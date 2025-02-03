@@ -389,7 +389,7 @@ async def remove_blacklist(interaction: discord.Interaction, channel: discord.Te
     channels = db.get_database(DATABASE).get_collection(
         "guilds").find_one({"_id": interaction.guild.id})["blacklist"]
     if channel["channel_id"] not in channels:
-        await interaction.followup.send(f"{channel.mention} is not in the blacklist", ephemeral=True)
+        await interaction.followup.send(f"{channel.name} is not in the blacklist", ephemeral=True)
         return
 
     db.get_database(DATABASE).get_collection("guilds").update_one(
@@ -397,7 +397,7 @@ async def remove_blacklist(interaction: discord.Interaction, channel: discord.Te
         {"$pull": {"blacklist": channel["channel_id"]}},
         upsert=True,
     )
-    await interaction.followup.send(f"Removed {channel.mention} from blacklist")
+    await interaction.followup.send(f"Removed {channel.name} from blacklist")
 
 
 @bot.tree.command(name="quote", description="Quote a message")
