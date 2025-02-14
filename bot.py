@@ -167,7 +167,7 @@ class Client(discord.Client):
             return
         blacklist = (
             db.get_database(DATABASE)
-            .get_collection("blacklist")
+            .get_collection("guilds")
             .find_one({"_id": message.guild.id})
         )
         if blacklist and payload.channel_id in blacklist["blacklist"]:
