@@ -29,9 +29,6 @@ db = MongoClient(CONNECTION_STRING)
 scheduler = AsyncIOScheduler()
 
 AUSTRALIAN_TIMEZONE = pytz.timezone("Australia/Sydney")
-START_DATE = datetime.datetime.now(AUSTRALIAN_TIMEZONE).replace(
-    hour=21, minute=0, second=0, microsecond=0
-)
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -61,11 +58,12 @@ class Client(discord.Client):
         guilds = db.get_database(DATABASE).get_collection("guilds").find()
         for guild in guilds:
             channel = self.get_channel(guild["channel_id"])
+            hour, minute = list(map(int, (guild.get("time", None) or "21_0").split("_"))) # format 21_0
             if not channel:
                 continue
             scheduler.add_job(
                 self.post_quote,
-                trigger=CronTrigger(hour=21, minute=0,
+                trigger=CronTrigger(hour=hour, minute=minute,
                                     timezone=AUSTRALIAN_TIMEZONE),
                 args=[channel],
                 id=str(guild["_id"]),
@@ -172,7 +170,7 @@ class Client(discord.Client):
         )
         if blacklist and payload.channel_id in blacklist["blacklist"]:
             return
-        
+
         message_created_time = message.created_at.replace(
             tzinfo=datetime.timezone.utc
         ).astimezone(AUSTRALIAN_TIMEZONE)
@@ -269,7 +267,7 @@ bot = Client()
 
 
 @bot.tree.command(name="setup", description="Set channel to post quotes in")
-async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
+async def setup(interaction: discord.Interaction, channel: discord.TextChannel, time: str):
     await interaction.response.defer()
     if not interaction.user.guild_permissions.administrator:
         await interaction.followup.send(
@@ -293,9 +291,16 @@ async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
         )
         return
 
+    parsed_time = time.split("_")
+    if not all(map(lambda x: x.isdigit(), parsed_time)) or len(parsed_time) != 2:
+        await interaction.followup.send("Time doesn't follow hh_mm (24 HOUR) format", ephemeral=True)
+        return
+
+    hour, minute = map(int,parsed_time)
+
     db.get_database(DATABASE).get_collection("guilds").update_one(
         {"_id": interaction.guild.id},
-        {"$set": {"channel_id": channel.id, "threads": True, "blacklist": []}},
+        {"$set": {"channel_id": channel.id, "threads": True, "blacklist": [], "time" : time}},
         upsert=True,
     )
     await interaction.followup.send(f"Set channel to {channel.mention}")
@@ -303,7 +308,7 @@ async def setup(interaction: discord.Interaction, channel: discord.TextChannel):
     # generate a interval
     scheduler.add_job(
         bot.post_quote,
-        trigger=CronTrigger(hour=21, minute=0, timezone=AUSTRALIAN_TIMEZONE),
+        trigger=CronTrigger(hour=hour, minute=minute, timezone=AUSTRALIAN_TIMEZONE),
         args=[channel],
         id=str(interaction.guild.id),
         replace_existing=True,
@@ -356,7 +361,7 @@ async def add_blacklist(interaction: discord.Interaction, channel: discord.TextC
         .get_collection("guilds")
         .find_one({"_id": interaction.guild.id})
     )
-    
+
     if channel.id in blacklist["blacklist"]:
         await interaction.followup.send("Channel already in blacklist", ephemeral=True)
         return
@@ -386,10 +391,10 @@ async def remove_blacklist(interaction: discord.Interaction, channel: discord.Te
     if not guild:
         await interaction.followup.send("Guild not setup", ephemeral=True)
         return
-    
+
     channels = db.get_database(DATABASE).get_collection(
         "guilds").find_one({"_id": interaction.guild.id})["blacklist"]
-    
+
     if channel.id not in channels:
         await interaction.followup.send(f"{channel.name} is not in the blacklist", ephemeral=True)
         return
